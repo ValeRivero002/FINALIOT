@@ -13,7 +13,7 @@ void applyDispenserState();
 
 extern WiFiClientSecure wiFiClient;
 extern PubSubClient client;
-
+extern const char* CLIENT_ID;
 extern const char* UPDATE_TOPIC;
 extern const char* UPDATE_DELTA_TOPIC;
 

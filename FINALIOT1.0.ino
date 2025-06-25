@@ -2,19 +2,20 @@
 #include "WeightSensor.h"
 #include "MQTTManager.h"
 #include "CommunicationManager.h"
+#include "certificates.h"
+
 #include <WiFiManager.h>
+WiFiManager wm;
 
-WiFiManager wm;  // Instancia global (sin wrapper)
-
-// Declaraciones externas necesarias
 extern HX711 scale;
 extern String Weight;
 extern String PastWeight;
-extern bool resetWiFiFlag;
-extern const int RESET_WIFI_PIN;
 extern WiFiClientSecure wiFiClient;
 extern PubSubClient client;
 
+const int RESET_WIFI_PIN = 2;
+bool resetWiFiFlag = false;
+const char* CLIENT_ID = "ESP32-SMART-DISPENSER-001";
 void setup() {
   Serial.begin(115200);
   Serial.println("Iniciando Smart Dispenser...");
@@ -24,8 +25,19 @@ void setup() {
   initDispenser();
   initScale();
 
-  setupWiFi();
+  // Configurar WiFiManager directamente
+  wm.setConfigPortalTimeout(180);  // 3 minutos
+  bool connected = wm.autoConnect("SmartDispenser_Setup", "12345678");
+  if (!connected) {
+    Serial.println("❌ No se pudo conectar a WiFi. Reiniciando...");
+    delay(1000);
+    ESP.restart();
+  }
+  Serial.println("✅ WiFi conectado!");
+  Serial.print("SSID: "); Serial.println(WiFi.SSID());
+  Serial.print("IP: "); Serial.println(WiFi.localIP());
 
+  // Configurar TLS
   wiFiClient.setCACert(AMAZON_ROOT_CA1);
   wiFiClient.setCertificate(CERTIFICATE);
   wiFiClient.setPrivateKey(PRIVATE_KEY);
@@ -36,19 +48,62 @@ void setup() {
 }
 
 void loop() {
-  checkWiFiConnection();
-  handleResetButton();
-
-  if (resetWiFiFlag) {
-    resetWiFiFlag = false;
-    resetWiFiSettings();
+  // Verificar botón de reset WiFi
+  static bool buttonPressed = false;
+  static unsigned long lastPress = 0;
+  if (digitalRead(RESET_WIFI_PIN) == LOW) {
+    if (!buttonPressed) {
+      lastPress = millis();
+      buttonPressed = true;
+    }
+  } else {
+    if (buttonPressed) {
+      buttonPressed = false;
+      unsigned long pressTime = millis() - lastPress;
+      if (pressTime >= 3000) {
+        Serial.println("🔁 Presión larga → reseteando WiFi...");
+        wm.resetSettings();
+        delay(1000);
+        ESP.restart();
+      } else {
+        Serial.println("ℹ️ Presión corta → info de WiFi:");
+        Serial.printf("SSID: %s, IP: %s, RSSI: %d dBm\n", 
+                      WiFi.SSID().c_str(), 
+                      WiFi.localIP().toString().c_str(), 
+                      WiFi.RSSI());
+      }
+    }
   }
 
+  // Verificar estado de conexión WiFi cada 30s
+  static unsigned long lastCheck = 0;
+  if (millis() - lastCheck > 30000) {
+    lastCheck = millis();
+    if (WiFi.status() != WL_CONNECTED) {
+      Serial.println("WiFi desconectado. Intentando reconectar...");
+      WiFi.reconnect();
+      int attempts = 0;
+      while (WiFi.status() != WL_CONNECTED && attempts < 20) {
+        delay(500);
+        Serial.print(".");
+        attempts++;
+      }
+      if (WiFi.status() != WL_CONNECTED) {
+        Serial.println("\n⚠️ No se pudo reconectar. Reiniciando...");
+        ESP.restart();
+      } else {
+        Serial.println("\n✅ WiFi reconectado!");
+      }
+    }
+  }
+
+  // Reconectar MQTT si se pierde conexión
   if (!client.connected()) {
     reconnect();
   }
   client.loop();
 
+  // Lectura y publicación del peso
   static unsigned long lastRead = 0;
   if (millis() - lastRead < 100) return;
   lastRead = millis();
@@ -68,3 +123,4 @@ void loop() {
     PastWeight = Weight;
   }
 }
+

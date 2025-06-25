@@ -6,7 +6,7 @@
 
 extern WiFiClientSecure wiFiClient;
 extern PubSubClient client;
-
+extern const char* CLIENT_ID;
 extern const char* MQTT_BROKER;
 extern const int MQTT_PORT;
 extern const char* CLIENT_ID;
