@@ -1,0 +1,10 @@
+SELECT 
+    topic(3) AS thing_name, 
+    substring(topic(3),0,15) AS thing_type,
+    substring(topic(3),16,23) AS serial_number,
+    state.reported.dispenser_state AS dispenser_state
+FROM '$aws/things/+/shadow/update' 
+WHERE 
+substring(topic(3),0,15) = 'smart_dispenser' AND
+state.reported.weight = 'enough' OR
+state.reported.weight = 'overflowing'
