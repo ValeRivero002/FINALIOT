@@ -1,0 +1,12 @@
+SELECT 
+    topic(3) AS thing_name,
+    timestamp() AS timestamp,
+    substring(topic(3),0,15) AS thing_type,
+    substring(topic(3),16,23) AS serial_number,
+    current.state.reported.weight AS weight
+FROM '$aws/things/+/shadow/update/documents'
+WHERE
+    substring(topic(3),0,15) = 'smart_dispenser' AND
+    previous.state.reported.weight <> current.state.reported.weight AND
+    current.state.reported.weight <> null AND
+    current.state.reported.weight <> ''
