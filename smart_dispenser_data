@@ -1,0 +1,55 @@
+import json
+import boto3
+from boto3.dynamodb.conditions import Key
+
+dynamodb = boto3.resource('dynamodb')
+table = dynamodb.Table('smart_dispenser_data')
+
+def lambda_handler(event, context):
+    try:
+        thing_name = event.get('thing_name')
+        timestamp = event.get('timestamp')
+        weight = event.get('weight')
+
+        response = table.query(
+            KeyConditionExpression=Key('thing_name').eq(thing_name),
+            ScanIndexForward=False,  # Orden descendente
+            Limit=1
+        )
+
+        if 'Items' in response and len(response['Items']) > 0:
+            last_item = response['Items'][0]
+            last_timestamp = last_item['timestamp']
+            duracion = timestamp - last_timestamp
+
+            # Actualizar ese registro anterior
+            table.update_item(
+                Key={
+                    'thing_name': thing_name,
+                    'timestamp': last_timestamp
+                },
+                UpdateExpression='SET duracion = :d',
+                ExpressionAttributeValues={
+                    ':d': duracion
+                }
+            )
+
+        new_item = {
+            'thing_name': thing_name,
+            'timestamp': timestamp,
+            'weight': weight
+        }
+
+        table.put_item(Item=new_item)
+
+        return {
+            'statusCode': 200,
+            'body': json.dumps({'message': 'Registro actualizado correctamente'})
+        }
+
+    except Exception as e:
+        print(f"Exception: {e}")
+        return {
+            'statusCode': 500,
+            'body': json.dumps({'error': str(e)})
+        }
