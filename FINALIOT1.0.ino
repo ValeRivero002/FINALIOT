@@ -1,8 +1,19 @@
 #include "Dispenser.h"
 #include "WeightSensor.h"
-#include "WiFiManagerWrapper.h"
 #include "MQTTManager.h"
 #include "CommunicationManager.h"
+#include <WiFiManager.h>
+
+WiFiManager wm;  // Instancia global (sin wrapper)
+
+// Declaraciones externas necesarias
+extern HX711 scale;
+extern String Weight;
+extern String PastWeight;
+extern bool resetWiFiFlag;
+extern const int RESET_WIFI_PIN;
+extern WiFiClientSecure wiFiClient;
+extern PubSubClient client;
 
 void setup() {
   Serial.begin(115200);
